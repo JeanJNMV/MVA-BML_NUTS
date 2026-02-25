@@ -149,11 +149,17 @@ The dual averaging scheme reliably matches the realised acceptance statistic to 
 
 \subsection{Strengths and Weaknesses of the Article}
 
-\subsection{Practical Limitations}
+As explained, the major strength of the article is that it resolves a central practical limitation of HMC, the manual tuning of the trajectory length through a conceptually simple yet theoretically rigorous construction. The No-U-Turn criterion and recursive doubling scheme are carefully designed to preserve detailed balance, and the integration of slice sampling ensures exactness despite adaptive stopping. The addition of dual averaging for step-size adaptation makes the method essentially tuning-free, greatly improving usability. 
+
+However, some limitations remain. The dual-averaging scheme introduces hyperparameters whose default values are justified empirically rather than theoretically, and performance guarantees are mainly asymptotic, with limited insight into convergence rates. The tree-building procedure adds computational overhead and may waste gradient evaluations when trajectories are long. Finally, although the experiments are extensive, they cover only a limited range of models, leaving the behavior of NUTS on more pathological or highly multimodal targets less explored as we will see here.
+
+\subsection{Practical Limitations}\todo{a voir si on garde les sous titres ca prends de la place}
 
 \section{Our Implementation and Extensions}
 
 \section{Conclusion}
+
+\newpage
 
 {\footnotesize
 \bibliographystyle{unsrtnat}
