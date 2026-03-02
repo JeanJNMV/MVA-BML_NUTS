@@ -54,17 +54,13 @@ In this report, we first examine the theoretical, computational, and empirical m
 
 \section{The No-U-Turn Sampler: Methodology and Analysis}
 
-\subsection{Problem Definition and Limitations of HMC}
-
-HMC \cite{neal2011mcmc, duane1987hybrid} introduces auxiliary momentum variables $r \in \mathbb{R}^D$ paired with the parameters of interest $\theta \in \mathbb{R}^D$, defining the joint distribution
+\paragraph{Problem Definition and Limitations of HMC.} HMC \cite{neal2011mcmc, duane1987hybrid} introduces auxiliary momentum variables $r \in \mathbb{R}^D$ paired with the parameters of interest $\theta \in \mathbb{R}^D$, defining the joint distribution
 $p(\theta, r) \propto \exp\left\{\mathcal{L}(\theta) - \frac{1}{2} r \cdot r\right\},$
 where $\mathcal{L}(\theta)$ is the log-joint density up to a normalising constant. Each iteration resamples $r \sim \mathcal{N}(0, I)$ and simulates Hamiltonian dynamics via the leapfrog integrator for $L$ steps of size $\epsilon$, producing a proposal accepted or rejected via a Metropolis step. Because the leapfrog integrator is volume-preserving, proposals can be simultaneously distant and highly probable, enabling efficient exploration of high-dimensional targets.
 
 However, as mentioned earlier, HMC's performance depends critically on both $\epsilon$ and $L$. Too large an $\epsilon$ yields high rejection rates and too small wastes computation. If $L$ is too small the chain degenerates into a random walk, while if $L$ is too large the trajectory loops back on itself, wasting gradient evaluations. Selecting a good $L$ typically requires several costly preliminary runs and considerable expertise, limiting HMC's adoption in general-purpose inference software \cite{main}.
 
-\subsection{The No-U-Turn Criterion and Trajectory Construction}
-
-NUTS eliminates the need to specify $L$ by stopping trajectory simulation automatically when further simulation would no longer move the proposal away from the starting point. The key quantity is the time derivative of half the squared distance between current position $\tilde{\theta}$ and initial position $\theta$. When this derivative becomes negative, the trajectory is doubling back, making further simulation inefficient. A naive stopping rule based on this criterion would violate time-reversibility, so NUTS instead builds trajectories both forwards and backwards in fictitious time via a recursive doubling scheme. 
+\paragraph{The No-U-Turn Criterion and Trajectory Construction.} NUTS eliminates the need to specify $L$ by stopping trajectory simulation automatically when further simulation would no longer move the proposal away from the starting point. The key quantity is the time derivative of half the squared distance between current position $\tilde{\theta}$ and initial position $\theta$. When this derivative becomes negative, the trajectory is doubling back, making further simulation inefficient. A naive stopping rule based on this criterion would violate time-reversibility, so NUTS instead builds trajectories both forwards and backwards in fictitious time via a recursive doubling scheme. 
 
 At each doubling step $j$, a direction $v_j \sim \mathrm{Uniform}(\{-1,+1\})$ is drawn and $2^j$ leapfrog steps of size $v_j\epsilon$ are taken, implicitly constructing a balanced binary tree whose leaves are visited position-momentum states. To ensure detailed balance, the model is augmented with a slice variable $u \sim \mathrm{Uniform}([0,\exp\{\mathcal{L}(\theta)-\frac{1}{2}r\cdot r\}])$, and the candidate set $\mathcal{C}\subseteq\mathcal{B}$ is restricted to visited states lying within the slice. Doubling halts either upon numerical instability or when a U-turn is detected in any balanced subtree, i.e., when the leftmost and rightmost leaves $(\theta^-, r^-)$, $(\theta^+, r^+)$ satisfy
 \[
@@ -73,20 +69,15 @@ At each doubling step $j$, a direction $v_j \sim \mathrm{Uniform}(\{-1,+1\})$ is
 States added during a halting iteration are excluded from $\mathcal{C}$ to preserve detailed balance. The efficient implementation further reduces memory from $O(2^j)$ to $O(j)$ by propagating a single representative state through the recursion and applying a Metropolis-Hastings accept/reject step after each doubling rather than sampling from $\mathcal{C}$ explicitly at the end.
 
 
-\subsection{Adaptive Step Size Selection via Dual Averaging}
-
-To also automate the tuning of $\epsilon$, the authors adapt the primal-dual averaging algorithm of \citet{nesterov2009primal}. The step size is only updated during a warm-up phase to drive the average acceptance statistic towards a target $\delta$, via:
+\paragraph{Adaptive Step Size Selection via Dual Averaging.} To also automate the tuning of $\epsilon$, the authors adapt the primal-dual averaging algorithm of \citet{nesterov2009primal}. The step size is only updated during a warm-up phase to drive the average acceptance statistic towards a target $\delta$, via:
 \[
 x_{t+1} = \mu - \frac{\sqrt{t}}{\gamma(t + t_0)} \sum_{i=1}^{t} H_i, \qquad \bar{x}_{t+1} = t^{-\kappa} x_{t+1} + (1 - t^{-\kappa}) \bar{x}_t,
 \]
 where $x = \log\epsilon$, $H_t$ is a custom statistic that describes the behavior of an MCMC algorithm at iteration $t \geq 1$ (possibly a function of the acceptance rate of the Metropolis step), $\mu = \log(10\epsilon_0)$ encourages testing larger values of $\epsilon$, and $\gamma$, $t_0$, $\kappa$ are fixed hyperparameters set to $0.05$, $10$, and $0.75$ throughout. This scheme renders NUTS entirely tuning-free.
 
+Some components are only briefly sketched in the original paper, so we provide more detailed derivations here. We focus on the two key theoretical ingredients ensuring correctness of NUTS: the uniform distribution over the candidate set $\mathcal{C}$ and the memory-efficient transition kernel.
 
-\subsection{Theoretical Complements}
-
-\subsubsection{Rigorous Proof of Uniform Distribution over the Candidate Set}
-
-In the original paper, the uniformity of the conditional distribution over the candidate set $\mathcal{C}$ (Equation (2) in the paper) is derived very concisely from conditions C.1 to C.4. The argument is compressed into a few proportionality statements. We restate it more explicitly.
+\paragraph{Rigorous Proof of Uniform Distribution over the Candidate Set.} In the original paper, the uniformity of the conditional distribution over the candidate set $\mathcal{C}$ (Equation (2) in the paper) is derived very concisely from conditions C.1 to C.4. The argument is compressed into a few proportionality statements. We restate it more explicitly.
 
 Let $w=(\theta,r)$. The augmented joint density is:
 \[
@@ -112,11 +103,9 @@ which shows that the conditional distribution is uniform over $\mathcal{C}$. Fin
 p(w \mid u,\mathcal{B},\mathcal{C},\varepsilon)
 = \frac{1}{|\mathcal{C}|}\,\mathbb{I}[w\in\mathcal{C}],
 \]
-as required. \todo{pareil a voir si on garde}
+as required. \todo{pareil a voir si on garde} 
 
-\subsubsection{The Transition Kernel and Proof of Detailed Balance}
-
-We now turn to the second key ingredient ensuring correctness of Efficient NUTS, the memory-efficient transition kernel, whose role is to preserve the uniform distribution over the candidate set $\mathcal{C}$ while enabling incremental sampling from newly constructed subtrees.
+\paragraph{The Transition Kernel and Proof of Detailed Balance.} We now turn to the second key ingredient ensuring correctness of Efficient NUTS, the memory-efficient transition kernel, whose role is to preserve the uniform distribution over the candidate set $\mathcal{C}$ while enabling incremental sampling from newly constructed subtrees.
 To reduce memory complexity from $\mathcal{O}(2^j)$ to $\mathcal{O}(j)$, Efficient NUTS introduces a custom transition kernel $T(w'|w, \mathcal{C})$. Instead of uniformly sampling the full candidate set $\mathcal{C}$, the algorithm partitions $\mathcal{C}$ into $\mathcal{C}^{old}$ (previously visited states) and $\mathcal{C}^{new}$ (states added during the final doubling). For a current state $w \in \mathcal{C}^{old}$, it proposes a jump to $w' \in \mathcal{C}^{new}$ uniformly and accepts it with probability $\min\left(1, \frac{|\mathcal{C}^{new}|}{|\mathcal{C}^{old}|}\right)$. This allows incremental sampling from subtrees without storing all states, while favoring exploration of distant regions.
 
 The authors state that this kernel satisfies detailed balance with respect to the uniform distribution $p(w|\mathcal{C}) = \frac{1}{|\mathcal{C}|}$, but omit the exact proof. We provide a brief derivation here. 
@@ -139,8 +128,7 @@ Distributing the factors into the minimum functions gives:
 \end{equation*}
 Since both sides are trivially equal, detailed balance holds, proving that the memory-efficient transition kernel preserves the target uniform distribution over $\mathcal{C}$. \todo{a voir si on garde}
 
-\subsection{Empirical Evaluation}
-
+\paragraph{Empirical Evaluation.}
 The authors evaluate NUTS and HMC on four targets: a 250-dimensional multivariate normal, the posterior of a Bayesian logistic regression (25 parameters) and its hierarchical extension (302 parameters) both fitted to the German credit data set, and a 3001-dimensional stochastic volatility model fitted to S\&P~500 returns. Performance is measured as effective sample size (ESS) per gradient evaluation, with the minimum ESS across dimensions reported. HMC is tested across a grid of simulation lengths and target acceptance rates, while NUTS is tested across values of $\delta$ only, for a total of over 3800 experiments.
 
 The dual averaging scheme reliably matches the realised acceptance statistic to its target $\delta$ and $\bar{\epsilon}$ converges within a few hundred warm-up iterations on most models. NUTS trajectory lengths concentrate on integer powers of two, confirming that the U-turn criterion is typically triggered only after a complete doubling. In terms of ESS per gradient, NUTS matches or exceeds the best tuned HMC across all four distributions, outperforming it by roughly a factor of two on the multivariate normal and 1.5 on the stochastic volatility model, without requiring any tuning of the trajectory length.
