@@ -30,7 +30,7 @@ class HierarchicalLogisticRegression:
         log_likelihood = -np.sum(np.logaddexp(0, z))
 
         # Log-prior
-        log_prior = -0.5 * (np.sum(coeffs**2) * inv_sigma_sq) - (self.N / 2) * v - self.lam * sigma_sq + v
+        log_prior = -0.5 * (np.sum(coeffs**2) * inv_sigma_sq) - (self.d_coeffs / 2) * v - self.lam * sigma_sq + v
 
         return log_likelihood + log_prior
 
@@ -57,7 +57,7 @@ class HierarchicalLogisticRegression:
         grad[:self.d_coeffs] = grad_likelihood_coeffs + grad_prior_coeffs
 
         # Gradient w.r.t. v = log(sigma^2)
-        grad[-1] = 0.5 * np.sum(coeffs**2) * inv_sigma_sq - (self.N / 2.0) - self.lam * sigma_sq + 1.0
+        grad[-1] = 0.5 * np.sum(coeffs**2) * inv_sigma_sq - (self.d_coeffs / 2.0) - self.lam * sigma_sq + 1.0
 
         return grad
     
