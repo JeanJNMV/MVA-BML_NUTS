@@ -242,6 +242,8 @@ class DualAveragingNUTS():
             theta_next = theta_prev
             n = 1
             s = 1
+            alpha = 0.0
+            n_alpha = 0.0
 
             # Build the tree until the stopping criterion is met
             while s == 1 and j < self.max_depth:
@@ -259,6 +261,8 @@ class DualAveragingNUTS():
                     
                 n += n_prime
                 s = s_prime and int(np.dot(theta_plus - theta_minus, r_minus) >= 0) and int(np.dot(theta_plus - theta_minus, r_plus) >= 0)
+                alpha += alpha
+                n_alpha += n_alpha
                 j += 1
             
             # Adapt epsilon using dual averaging
