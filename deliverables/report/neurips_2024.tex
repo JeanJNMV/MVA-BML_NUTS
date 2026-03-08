@@ -26,7 +26,7 @@
 \author{%
   Adonis Jamal \\
   ENS Paris-Saclay \\
-  \texttt{\small adonis.jamal@ens-paris-saclay.fr}\\
+  \texttt{\small adonis.jamal@student-cs.fr}\\
   \And
   Jean-Vincent Martini \\ 
   ENS Paris-Saclay \\
@@ -136,7 +136,7 @@ The original evaluation is limited to unimodal or mildly structured targets. We 
 
 \vspace{0.05cm}
 \noindent\textit{(i) Multimodal Stress Test: Bayesian Neural Network.}
-We fit a two-hidden-layer BNN (30$\to$5$\to$5$\to$1, 191 parameters, $\mathcal{N}(0,100)$ priors) to the UCI Breast Cancer dataset. Weight-permutation symmetries create $5!\times5!=14{,}400$ equivalent modes separated by saddle points. With $\delta=0.65$, $M=450$, $M_{\text{adapt}}=150$, NUTS adapts trajectory lengths between 1 and 64 leapfrog steps, exploring a wider region of weight space than HMC. Trace plots confirm NUTS covers a broader range of weight values, while HMC exhibits prolonged stagnation, suggesting confinement to a single mode.
+We fit a two-hidden-layer BNN (30$\to$5$\to$5$\to$1, 191 parameters, $\mathcal{N}(0,100)$ priors) to the UCI Breast Cancer dataset. Weight-permutation symmetries create $5!\times5!=14{,}400$ equivalent modes separated by saddle points. With $\delta=0.65$, $M=450$, $M_{\text{adapt}}=150$, NUTS adapts trajectory lengths between 1 and 64 leapfrog steps, exploring a wider region of weight space than HMC. Trace plots confirm NUTS covers a broader range of weight values, while HMC exhibits prolonged stagnation, suggesting confinement to a single mode. However, our results expose two underappreciated limitations. First, NUTS does not always achieve higher ESS per gradient than well-tuned HMC: in our tests, NUTS yields $0.03\times 10^{-4}$ ESS/grad versus $1.57\times 10^{-4}$ for HMC. On posteriors with narrow correlated valleys, NUTS continues doubling its tree, technically avoiding a U-turn, while the trajectory wanders inefficiently. A fixed-$L$ HMC interrupts this behaviour at a fraction of the cost. Second, the paper measures efficiency solely in ESS per gradient evaulation, which conceals NUTS's algorithmic overhead: each step requires recursive \texttt{build\_tree} calls, forward/backward state allocation, and per-node dot products to check the U-turn condition, whereas HMC executes a simple leapfrog loop. Even when NUTS matches HMC in ESS/grad, well-tuned HMC is often faster in wall-clock time.
 
 \noindent\textit{(ii) Dense Correlation Test: GP Classification.}
 We apply GP classification with an RBF kernel ($\ell=1$, $\sigma_f^2=1$) to 150 points from the California Housing dataset, yielding a fully dense $150 \times 150$ covariance $K$. The gradient $\nabla\log p(\mathbf{f}) = -K^{-1}\mathbf{f} + \mathbf{y}\odot\sigma(-\mathbf{y}\odot \mathbf{f})$ requires a dense solve at every leapfrog step. With $M=500$ and $M_{\text{adapt}}=250$, NUTS achieves $2.14\times10^{-3}$ ESS/grad at $\delta=0.65$ versus $1.52 \times 10^{-3}$ for HMC, a $40\%$ improvement. However, NUTS consumed roughly $4\times$ more gradient evaluations in total (24,840 vs. 6,388), as the dense covariance structure induces long trajectories before a U-turn is detected. This suggests that on densely correlated targets, NUTS's adaptive mechanism partially trades absolute gradient cost for better per-gradient sample quality, and the practical advantage over a well-tuned HMC is narrower than on other benchmarks. Note that since both methods invoke the same dense solve per leapfrog step, gradient evaluation costs are identical here, so ESS/grad faithfully reflects wall-clock efficiency.
@@ -148,22 +148,26 @@ Neal's funnel \cite{neal2003slice} is a canonical pathological target: $v\sim\ma
 Across all three stress tests, NUTS consistently outperforms HMC without trajectory-length tuning. The gains are most dramatic when the posterior geometry varies spatially (Neal's funnel) or features many equivalent modes (BNN), precisely the scenarios unexplored in the original paper, confirming that NUTS's adaptive mechanism is essential for complex posteriors. The full code and results for these experiments are available in our GitHub repository.
 
 \section{Conclusion}
-This review confirms that NUTS constitutes a significant advance in practical Bayesian computation. Our independent implementation validates the original results: NUTS matches or exceeds the best-tuned HMC on all four benchmarks while eliminating trajectory-length tuning. More importantly, our stress tests on a multimodal BNN, a densely correlated GP classifier, and Neal's funnel demonstrate that the adaptive trajectory length is critical on posteriors with complex geometries. HMC fails catastrophically on the funnel and stagnates in the multimodal landscape, whereas NUTS handles both seamlessly, and achieves modest but consistent gains on even densely correlated targets where its advantage is more limited, confirming its suitability as a general-purpose inference engine for modern Bayesian models.
+This review confirms that NUTS constitutes a significant advance in practical Bayesian computation. It is tuning-free and avoids the hassle of finding $L$ for HMC, while also handling varying geometry. Our independent implementation validates the original results: NUTS matches or exceeds the best-tuned HMC on all four benchmarks while eliminating trajectory-length tuning. More importantly, our stress tests on a multimodal BNN, a densely correlated GP classifier, and Neal's funnel demonstrate that the adaptive trajectory length is critical on posteriors with complex geometries. HMC fails catastrophically on the funnel and stagnates in the multimodal landscape, whereas NUTS manages to handle, and achieves modest but consistent gains on even densely correlated targets where its advantage is more limited, confirming its suitability as a general-purpose inference engine for modern Bayesian models.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.75\textwidth]{Funnel/funnel_scatter.png}
-    \vspace{-0.3cm}
-    \caption{Neal's Funnel $(v,x_1)$ scatter. \textbf{Left:} ground truth. \textbf{Centre:} NUTS covers the full funnel. \textbf{Right:} HMC fails to enter the narrow neck ($v<0$), producing biased samples.}
-    \label{fig:funnel_scatter}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.6\textwidth]{Funnel/trace_plots.png}
-    \vspace{-0.3cm}
-    \caption{Trace plots on Neal's Funnel. NUTS (left, blue) transitions freely across the full $v$ range with good mixing in all $x_i$. HMC (right, red) gets trapped with flat segments and $x_i$ degenerating to near-zero.}
-    \label{fig:funnel_traces}
+    \begin{subfigure}[t]{0.42\textwidth}
+        \centering
+        \includegraphics[width=0.54\textwidth]{Funnel/funnel_scatter_vertical.png}
+        \caption{Neal's Funnel $(v,x_1)$ scatter. \textbf{Top:} ground truth. \textbf{Centre:} NUTS covers the full funnel. \textbf{Bottom:} HMC fails to enter the narrow neck ($v<0$).}
+        \label{fig:funnel_scatter}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.55\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Funnel/trace_plots.png}
+        \caption{Trace plots. NUTS (left, blue) transitions freely across the full $v$ range with good mixing in all $x_i$. HMC (right, red) gets trapped with flat segments and $x_i$ degenerating to near-zero.}
+        \label{fig:funnel_traces}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \caption{Diagnostics on Neal's Funnel.}
+    \label{fig:funnel_diagnostics}
 \end{figure} 
 
 {\tiny
