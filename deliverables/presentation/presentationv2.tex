@@ -26,13 +26,13 @@
     sorting=ynt
 ]{biblatex}
 \addbibresource{bibliography.bib}
-
+ 
 % --- Colour palette ---
 \definecolor{CSred}{RGB}{160,32,60}
 \definecolor{CSgrey}{RGB}{136,121,150}
 \definecolor{CSlight}{RGB}{245,240,248}
 \definecolor{alertorange}{RGB}{200,80,0}
-\definecolor{metrobg}{RGB}{250,249,252}
+\definecolor{metrobg}{RGB}{255,255,255}
 
 % --- Metropolis overrides ---
 \setbeamercolor{normal text}{fg=black!85, bg=metrobg}
@@ -352,18 +352,25 @@
 
 % --- Stress Test 2: GPC ---
 \begin{frame}{Stress Test 2: GP Classification (150-D)}
+  \small
+  \vspace*{-0.25cm}
   \textbf{Setup:} RBF kernel ($\ell=1$, $\sigma_f^2=1$), 150 California Housing points, fully dense $K$. The gradient $\nabla\log p(f)\!=\!-K^{-1}f + y\odot\sigma(-y\odot f)$ requires a dense solve at every leapfrog step.
 
-  \vspace{0.15cm}
+  \centering
+  \includegraphics[width=0.65\textwidth]{GPC/kernel_matrix.png}
+  \vspace*{-0.1cm}
+  \captionof{figure}{RBF kernel matrix $K$: dense correlation structure.}
+  \vspace*{-0.25cm}
   \begin{tcolorbox}[warnbox, title=Nuanced result]
     \small
     NUTS: $2.14\!\times\!10^{-3}$ ESS/grad \quad HMC: $1.52\!\times\!10^{-3}$ ESS/grad\\[3pt]
-    \textbf{Modest 40\% gain} --- but NUTS uses $4\times$ more gradient evaluations. The dense covariance induces long trajectories before a U-turn is detected. The advantage over well-tuned HMC is narrow here.
+    \textbf{Modest 40\% gain}, but NUTS uses $4\times$ more gradient evaluations. The dense covariance induces long trajectories before a U-turn is detected. The advantage over well-tuned HMC is narrow here.
   \end{tcolorbox}
 \end{frame}
 
 % --- Stress Test 3: Neal's Funnel ---
 \begin{frame}{Stress Test 3: Neal's Funnel (10-D)}
+  \textbf{Setup:} A pathological geometry with a narrow neck and wide top:
   $$v \sim \mathcal{N}(0,9), \qquad x_i\mid v\sim\mathcal{N}(0,e^v),\quad i=1,\dots,9$$
 
   \noindent
@@ -414,36 +421,34 @@
 
 \begin{frame}{Summary \& Takeaways}
   \noindent
-  \begin{minipage}[t]{0.475\textwidth}
     \begin{tcolorbox}[keybox, title=Paper strengths]
       \small
       \begin{itemize}
-        \item Resolves HMC's key practical limitation rigorously
-        \item Recursive doubling preserves detailed balance
-        \item Dual averaging $\Rightarrow$ essentially tuning-free
+        \item Resolves HMC's central practical limitation through a conceptually simple yet theoretically rigorous construction
+        \item No-U-Turn criterion and recursive doubling preserve detailed balance
+        \item Dual averaging for step-size adaptation $\Rightarrow$ essentially tuning-free
       \end{itemize}
     \end{tcolorbox}
-  \end{minipage}
-  \hfill
-  \begin{minipage}[t]{0.475\textwidth}
+
     \begin{tcolorbox}[warnbox, title=Limitations]
       \small
       \begin{itemize}
-        \item Dual-averaging hyperparameters empirically justified only
-        \item Guarantees mainly asymptotic
-        \item Original experiments miss pathological geometries
+        \item Dual-averaging hyperparameters justified empirically, not theoretically; robustness across different geometries is open
+        \item Performance guarantees mainly asymptotic
+        \item Experiments cover a limited range of posterior geometries, leaving pathological targets unexplored
       \end{itemize}
     \end{tcolorbox}
-  \end{minipage}
 
-  \vspace{-0.25cm}
+\end{frame}
 
-  \begin{tcolorbox}[keybox, title=Our contributions]
+\begin{frame}{Our Contributions}
+  \begin{tcolorbox}[keybox]
     \small
     \begin{itemize}
-      \item \textbf{Proofs} of uniform $\mathcal{C}$ distribution and detailed balance (omitted in paper)
-      \item \textbf{Reproduced} all 4 benchmarks; NUTS matches or exceeds best-tuned HMC
-      \item \textbf{Stress tests:} NUTS is critical on BNN \& Funnel; advantage narrows on dense GP
+      \item \textbf{Proofs} of uniform $\mathcal{C}$ distribution and detailed balance of the memory-efficient kernel (only sketched in paper)
+      \item \textbf{Reproduced} all 4 benchmarks; NUTS matches or exceeds best-tuned HMC without trajectory-length tuning
+      \item \textbf{Stress tests:} adaptive trajectory length is critical on complex posteriors --- gains most dramatic on Funnel \& BNN; advantage narrows on dense GP; ESS/grad metric conceals NUTS's algorithmic overhead
+      \item \textbf{Conclusion:} confirms NUTS's suitability as a general-purpose inference engine for modern Bayesian models
     \end{itemize}
   \end{tcolorbox}
 \end{frame}
