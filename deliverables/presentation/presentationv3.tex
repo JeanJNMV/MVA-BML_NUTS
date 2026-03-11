@@ -167,9 +167,10 @@
 % SECTION 4: IMPLEMENTATION AND BENCHMARKS
 % ==============================================================================
 \begin{frame}{Evaluating NUTS: The Paper's Benchmarks}
-    The paper tests NUTS on four targets spanning low to very high dimensions, measuring \textbf{minimum ESS per gradient evaluation} across all dimensions.
+  \vspace{-0.2cm}
+    The paper tests NUTS on four \textbf{unimodal or mildly structured} targets.
 
-    \vspace{0.2cm}
+    \vspace{-0.05cm}
     \noindent
     \begin{minipage}[t]{0.22\textwidth}\centering
       \begin{tcolorbox}[stressbox, title=250-D, halign=center]
@@ -195,23 +196,12 @@
       \end{tcolorbox}
     \end{minipage}
 
-    \vspace{0.3cm}
+    \vspace{-0.3cm}
     \begin{tcolorbox}[keybox]
-      NUTS matches or exceeds best-tuned HMC on \textbf{all four benchmarks} without
-      any trajectory-length tuning, up to $2\times$ on the Gaussian and $1.5\times$ on the
-      stochastic volatility model.
+      NUTS matches or exceeds best-tuned HMC on \textbf{all four benchmarks} without any trajectory-length tuning. What about posteriors with complex geometry?
     \end{tcolorbox}
 
-    \vspace{0.15cm}
-    But all four targets are \textbf{unimodal or mildly structured}. How does NUTS fare on posteriors with genuinely complex geometry?
-\end{frame}
-
-
-% ==============================================================================
-% SECTION 5: STRESS TESTS
-% ==============================================================================
-\begin{frame}{Beyond the Paper: Three Stress Tests}
-  \small
+      \small
   \vspace{-0.25cm}
   % TikZ diagram of three pathologies
   \begin{center}
@@ -249,7 +239,7 @@
 
     % Box 3: Funnel
     \node[draw=CSred, fill=CSlight, rounded corners=4pt, inner sep=5pt,
-          text width=2.6cm, align=center, right=0.3cm of B] (C) {
+          text width=2.8cm, align=center, right=0.3cm of B] (C) {
       \textbf{Varying Geometry}\\[2pt]
       \begin{tikzpicture}[scale=0.32]
         \fill[CSred!50]
@@ -263,8 +253,31 @@
 
   \end{tikzpicture}
   \end{center}
+\end{frame}
 
-  \vspace{-0.5cm}
+
+% ==============================================================================
+% SECTION 5: STRESS TESTS
+% ==============================================================================
+\begin{frame}{Beyond the Paper: Three Stress Tests}
+  \begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.42\textwidth}
+        \centering
+        \includegraphics[width=0.38\textwidth]{Funnel/funnel_scatter_vertical.png}
+        \label{fig:funnel_scatter}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.55\textwidth}
+        \centering
+        \includegraphics[width=0.7\textwidth]{Funnel/trace_plots.png}
+        \label{fig:funnel_traces}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \label{fig:funnel_diagnostics}
+\end{figure} 
+
+  \vspace{-0.3cm}
   \begin{tcolorbox}[warnbox, title=Results]
     \footnotesize
     \begin{itemize}\setlength\itemsep{2pt}
@@ -272,10 +285,8 @@
       \item \textbf{GPC:} Modest 40\% ESS/grad gain, but NUTS uses $4\times$ more gradient evaluations; advantage is narrow.
       \item \textbf{Funnel:} NUTS recovers $\mathrm{Var}(v)\!\approx\!9$ (truth); HMC's fixed $\varepsilon$ fails to explore the neck.
     \end{itemize}
+    {\footnotesize Adaptive trajectory length is critical on complex posteriors.}
   \end{tcolorbox}
-
-  \vspace{-0.1cm}
-  {\footnotesize Adaptive trajectory length is critical on complex posteriors; gains is the most dramatic on the Funnel.}
 \end{frame}
 
 % ==============================================================================
