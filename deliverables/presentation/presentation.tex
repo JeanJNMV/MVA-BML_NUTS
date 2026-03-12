@@ -8,6 +8,8 @@
 \usepackage{mathrsfs}
 \usepackage{amsmath} 
 \usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{caption}
@@ -390,6 +392,122 @@
     \]
 \end{frame}
 
+\begin{frame}{Heuristic for Initial Epsilon}
+    \setcounter{algorithm}{3} % Sets the algorithm counter so it displays as Algorithm 4
+    
+    \begin{algorithm}[H]
+    \caption{Heuristic for choosing an initial value of $\epsilon$}
+    \begin{algorithmic}
+    \STATE \textbf{function} $\text{FindReasonableEpsilon}(\theta)$
+    \STATE Initialize $\epsilon = 1, r \sim \mathcal{N}(0, I)$. ($I$ denotes the identity matrix.)
+    \STATE Set $\theta', r' \gets \text{Leapfrog}(\theta, r, \epsilon)$.
+    \STATE $a \gets 2\mathbb{I}\left[\frac{p(\theta', r')}{p(\theta, r)} > 0.5\right] - 1$.
+    \WHILE{$\left(\frac{p(\theta', r')}{p(\theta, r)}\right)^a > 2^{-a}$}
+        \STATE $\epsilon \gets 2^a \epsilon$.
+        \STATE Set $\theta', r' \gets \text{Leapfrog}(\theta, r, \epsilon)$.
+    \ENDWHILE
+    \STATE \textbf{return} $\epsilon$.
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{Hamiltonian Monte Carlo}
+    \setcounter{algorithm}{4} % Sets the algorithm counter so it displays as Algorithm 5
+    
+    \begin{algorithm}[H]
+    \footnotesize % Reduces font size slightly to ensure it fits on the presentation slide
+    \caption{Hamiltonian Monte Carlo with Dual Averaging}
+    \begin{algorithmic}
+    \STATE Given $\theta^0$, $\delta$, $\lambda$, $\mathcal{L}$, $M$, $M^{\text{adapt}}$:
+    \STATE Set $\epsilon_0 = \text{FindReasonableEpsilon}(\theta), \mu = \log(10\epsilon_0), \bar{\epsilon}_0 = 1, \bar{H}_0 = 0, \gamma = 0.05, t_0 = 10, \kappa = 0.75$.
+    \FOR{$m = 1$ to $M$}
+        \STATE Reample $r^0 \sim \mathcal{N}(0, I)$.
+        \STATE Set $\theta^m \gets \theta^{m-1}, \tilde{\theta} \gets \theta^{m-1}, \tilde{r} \gets r^0, L_m = \max\{1, \text{Round}(\lambda/\epsilon_{m-1})\}$.
+        \FOR{$i = 1$ to $L_m$}
+            \STATE Set $\tilde{\theta}, \tilde{r} \gets \text{Leapfrog}(\tilde{\theta}, \tilde{r}, \epsilon_{m-1})$.
+        \ENDFOR
+        \STATE With probability $\alpha = \min \left\{1, \frac{\exp\{\mathcal{L}(\tilde{\theta}) - \frac{1}{2}\tilde{r} \cdot \tilde{r}\}}{\exp\{\mathcal{L}(\theta^{m-1}) - \frac{1}{2}r^0 \cdot r^0\}}\right\}$, set $\theta^m \gets \tilde{\theta}, r^m \gets -\tilde{r}$.
+        \IF{$m \leq M^{\text{adapt}}$}
+            \STATE Set $\bar{H}_m = \left(1 - \frac{1}{m+t_0}\right) \bar{H}_{m-1} + \frac{1}{m+t_0}(\delta - \alpha)$.
+            \STATE Set $\log \epsilon_m = \mu - \frac{\sqrt{m}}{\gamma}\bar{H}_m, \log \bar{\epsilon}_m = m^{-\kappa} \log \epsilon_m + (1 - m^{-\kappa}) \log \bar{\epsilon}_{m-1}$.
+        \ELSE
+            \STATE Set $\epsilon_m = \bar{\epsilon}_{M^{\text{adapt}}}$.
+        \ENDIF
+    \ENDFOR
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{NUTS with Dual Averaging (1/2)}
+    \setcounter{algorithm}{5} % Sets the algorithm counter to display as Algorithm 6
+    
+    \begin{algorithm}[H]
+    \tiny % Font size reduced to fit Beamer slide
+    \caption{No-U-Turn Sampler with Dual Averaging (Main Loop)}
+    \begin{algorithmic}
+    \STATE Given $\theta^0$, $\delta$, $\mathcal{L}$, $M$, $M^{\text{adapt}}$:
+    \STATE Set $\epsilon_0 = \text{FindReasonableEpsilon}(\theta), \mu = \log(10\epsilon_0), \bar{\epsilon}_0 = 1, \bar{H}_0 = 0, \gamma = 0.05, t_0 = 10, \kappa = 0.75$.
+    \FOR{$m = 1$ to $M$}
+        \STATE Sample $r^0 \sim \mathcal{N}(0, I)$.
+        \STATE Resample $u \sim \text{Uniform}([0, \exp\{\mathcal{L}(\theta^{m-1}) - \frac{1}{2}r^0 \cdot r^0\}])$
+        \STATE Initialize $\theta^- = \theta^{m-1}, \theta^+ = \theta^{m-1}, r^- = r^0, r^+ = r^0, j = 0, \theta^m = \theta^{m-1}, n = 1, s = 1$.
+        \WHILE{$s = 1$}
+            \STATE Choose a direction $v_j \sim \text{Uniform}(\{-1, 1\})$.
+            \IF{$v_j = -1$}
+                \STATE $\theta^-, r^-, \_ , \_ , \theta', n', s', \alpha, n_\alpha \gets \text{BuildTree}(\theta^-, r^-, u, v_j, j, \epsilon_{m-1}, \theta^{m-1}, r^0)$.
+            \ELSE
+                \STATE $\_ , \_ , \theta^+, r^+, \theta', n', s', \alpha, n_\alpha \gets \text{BuildTree}(\theta^+, r^+, u, v_j, j, \epsilon_{m-1}, \theta^{m-1}, r^0)$.
+            \ENDIF
+            \IF{$s' = 1$}
+                \STATE With probability $\min\{1, \frac{n'}{n}\}$, set $\theta^m \gets \theta'$.
+            \ENDIF
+            \STATE $n \gets n + n'$.
+            \STATE $s \gets s'\mathbb{I}[(\theta^+ - \theta^-) \cdot r^- \ge 0]\mathbb{I}[(\theta^+ - \theta^-) \cdot r^+ \ge 0]$.
+            \STATE $j \gets j + 1$.
+        \ENDWHILE
+        \IF{$m \leq M^{\text{adapt}}$}
+            \STATE Set $\bar{H}_m = \left(1 - \frac{1}{m+t_0}\right) \bar{H}_{m-1} + \frac{1}{m+t_0}(\delta - \frac{\alpha}{n_\alpha})$.
+            \STATE Set $\log \epsilon_m = \mu - \frac{\sqrt{m}}{\gamma}\bar{H}_m, \log \bar{\epsilon}_m = m^{-\kappa} \log \epsilon_m + (1 - m^{-\kappa}) \log \bar{\epsilon}_{m-1}$.
+        \ELSE
+            \STATE Set $\epsilon_m = \bar{\epsilon}_{M^{\text{adapt}}}$.
+        \ENDIF
+    \ENDFOR
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{NUTS with Dual Averaging (2/2) - BuildTree}
+    \begin{algorithm}[H]
+    \tiny 
+    \textbf{Algorithm 6} (continued)
+    \begin{algorithmic}
+    \STATE \textbf{function} $\text{BuildTree}(\theta, r, u, v, j, \epsilon, \theta^0, r^0)$
+    \IF{$j = 0$}
+        \STATE Base case---take one leapfrog step in the direction $v$.
+        \STATE $\theta', r' \gets \text{Leapfrog}(\theta, r, v\epsilon)$.
+        \STATE $n' \gets \mathbb{I}[u \leq \exp\{\mathcal{L}(\theta') - \frac{1}{2}r' \cdot r'\}]$.
+        \STATE $s' \gets \mathbb{I}[u < \exp\{\Delta_{\max} + \mathcal{L}(\theta') - \frac{1}{2}r' \cdot r'\}]$.
+        \STATE \textbf{return} $\theta', r', \theta', r', \theta', n', s', \min\{1, \exp\{\mathcal{L}(\theta') - \frac{1}{2}r' \cdot r' - \mathcal{L}(\theta^0) + \frac{1}{2}r^0 \cdot r^0\}\}, 1$.
+    \ELSE
+        \STATE Recursion---implicitly build the left and right subtrees.
+        \STATE $\theta^-, r^-, \theta^+, r^+, \theta', n', s', \alpha', n'_\alpha \gets \text{BuildTree}(\theta, r, u, v, j - 1, \epsilon, \theta^0, r^0)$.
+        \IF{$s' = 1$}
+            \IF{$v = -1$}
+                \STATE $\theta^-, r^-, \_ , \_ , \theta'', n'', s'', \alpha'', n''_\alpha \gets \text{BuildTree}(\theta^-, r^-, u, v, j - 1, \epsilon, \theta^0, r^0)$.
+            \ELSE
+                \STATE $\_ , \_ , \theta^+, r^+, \theta'', n'', s'', \alpha'', n''_\alpha \gets \text{BuildTree}(\theta^+, r^+, u, v, j - 1, \epsilon, \theta^0, r^0)$.
+            \ENDIF
+            \STATE With probability $\frac{n''}{n' + n''}$, set $\theta' \gets \theta''$.
+            \STATE Set $\alpha' \gets \alpha' + \alpha'', n'_\alpha \gets n'_\alpha + n''_\alpha$.
+            \STATE $s' \gets s''\mathbb{I}[(\theta^+ - \theta^-) \cdot r^- \ge 0]\mathbb{I}[(\theta^+ - \theta^-) \cdot r^+ \ge 0]$
+            \STATE $n' \gets n' + n''$
+        \ENDIF
+        \STATE \textbf{return} $\theta^-, r^-, \theta^+, r^+, \theta', n', s', \alpha', n'_\alpha$.
+    \ENDIF
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
 \begin{frame}{Appendix: Benchmarks Bayesian \& Hierarchical Logistic Regression Efficiency}
   \noindent
   \begin{minipage}[t]{0.475\textwidth}
@@ -415,6 +533,194 @@
     \includegraphics[width=0.78\textwidth]{discrepancies_plot.png}
     \caption{Discrepancy plots ($h-\delta$ across $\delta$) for all four original benchmarks. Dual averaging reliably drives acceptance to target $\delta$ within a few hundred warm-up iterations.}
   \end{figure}
+\end{frame}
+
+\begin{frame}{Evaluating NUTS: The Paper's Benchmarks}
+    The paper tests NUTS on four targets spanning low to very high dimensions, measuring \textbf{minimum ESS per gradient evaluation} across all dimensions.
+
+    \vspace{0.2cm}
+    \noindent
+    \begin{minipage}[t]{0.22\textwidth}\centering
+      \begin{tcolorbox}[stressbox, title=250-D, halign=center]
+        \footnotesize Multivariate Normal
+      \end{tcolorbox}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.22\textwidth}\centering
+      \begin{tcolorbox}[stressbox, title=25-D, halign=center]
+        \footnotesize Logistic Regression
+      \end{tcolorbox}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.22\textwidth}\centering
+      \begin{tcolorbox}[stressbox, title=302-D, halign=center]
+        \footnotesize Hierarchical LR
+      \end{tcolorbox}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.22\textwidth}\centering
+      \begin{tcolorbox}[stressbox, title=3001-D, halign=center]
+        \footnotesize Stochastic Volatility
+      \end{tcolorbox}
+    \end{minipage}
+
+    \vspace{0.3cm}
+    \begin{tcolorbox}[keybox]
+      NUTS matches or exceeds best-tuned HMC on \textbf{all four benchmarks} without
+      any trajectory-length tuning, up to $2\times$ on the Gaussian and $1.5\times$ on the
+      stochastic volatility model.
+    \end{tcolorbox}
+
+    \vspace{0.15cm}
+    But all four targets are \textbf{unimodal or mildly structured}. How does NUTS fare on posteriors with genuinely complex geometry?
+\end{frame}
+
+
+% ==============================================================================
+% SECTION 5: STRESS TESTS
+% ==============================================================================
+\begin{frame}{Beyond the Paper: Three Stress Tests}
+
+  \vspace{0.1cm}
+  We probe three failure modes of HMC that are absent from the original evaluation:
+
+  \vspace{0.3cm}
+  % TikZ diagram of three pathologies
+  \begin{center}
+  \begin{tikzpicture}[>=Stealth, font=\small]
+
+    % Box 1: Multimodality
+    \node[draw=CSred, fill=CSlight, rounded corners=4pt, inner sep=6pt,
+          text width=2.6cm, align=center] (A) {
+      \textbf{Multimodality}\\[3pt]
+      \begin{tikzpicture}[scale=0.38]
+        \fill[CSred!70] (-2.4, 0) ellipse (0.28 and 0.6);
+        \fill[CSred!70] (0,    0) ellipse (0.28 and 0.6);
+        \fill[CSred!70] (2.4,  0) ellipse (0.28 and 0.6);
+        \draw[->, gray, thin] (-3.1,0) -- (3.1,0);
+      \end{tikzpicture}\\[2pt]
+      {\footnotesize BNN, 191-D\\$5!\!\times\!5!=14400$ modes}
+    };
+
+    % Box 2: Dense correlations
+    \node[draw=CSred, fill=CSlight, rounded corners=4pt, inner sep=6pt,
+          text width=3.2cm, align=center, right=0.35cm of A] (B) {
+      \textbf{Dense Correlations}\\[3pt]
+      \begin{tikzpicture}[scale=0.38]
+        \foreach \i in {1,...,4}{
+          \foreach \j in {1,...,4}{
+            \pgfmathsetmacro\op{0.15 + 0.7*exp(-0.4*abs(\i-\j))}
+            \fill[CSred, opacity=\op]
+              ({-0.9+(\i-1)*0.6}, {0.9-(\j-1)*0.6}) rectangle
+              ({-0.9+(\i-1)*0.6+0.55}, {0.9-(\j-1)*0.6-0.55});
+          }
+        }
+      \end{tikzpicture}\\[2pt]
+      {\footnotesize GP Classif., 150-D\\dense $150\!\times\!150$ cov.}
+    };
+
+    % Box 3: Funnel
+    \node[draw=CSred, fill=CSlight, rounded corners=4pt, inner sep=6pt,
+          text width=3.0cm, align=center, right=0.35cm of B] (C) {
+      \textbf{Varying Geometry}\\[3pt]
+      \begin{tikzpicture}[scale=0.38]
+        \fill[CSred!50]
+          (0, 1.5) -- (-1.1, 1.5) -- (-0.07, 0) -- (0.07, 0) -- (1.1, 1.5) -- cycle;
+        \fill[CSred!20]
+          (-0.07,0) -- (0.07,0) -- (0.04,-1.5) -- (-0.04,-1.5) -- cycle;
+        \draw[->, gray, thin] (0,-1.7) -- (0,1.7) node[right]{\tiny $v$};
+      \end{tikzpicture}\\[2pt]
+      {\footnotesize Neal's Funnel, 10-D\\spatially varying $\sigma$}
+    };
+
+  \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+% --- Stress Test 1: BNN ---
+\begin{frame}{Stress Test 1: Bayesian Neural Network (191-D)}
+    \textbf{Setup:} BNN ($30\!\to\!5\!\to\!5\!\to\!1$), $\mathcal{N}(0,100)$ priors on all weights, UCI Breast Cancer dataset. Weight-permutation symmetries create $5!\times5!=14{,}400$ equivalent modes.
+
+    \begin{columns}[T]
+      \begin{column}{0.475\textwidth}
+        \begin{tcolorbox}[keybox]
+          NUTS explores a \textbf{wider region of weight space}; HMC stagnates in a single mode.
+        \end{tcolorbox}
+        \begin{tcolorbox}[warnbox]
+            NUTS fails to achieve higher ESS per gradient than a well-tuned HMC ($0.03\times 10^{-4}$ vs. $1.57\times 10^{-4}$ for HMC in our tests).
+        \end{tcolorbox}
+      \end{column}
+      \begin{column}{0.475\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{BNN/trace_plots.png}
+        \captionof{figure}{Trace plots: NUTS (blue) covers a broader range of weight values than HMC (red).}
+      \end{column}
+    \end{columns}
+\end{frame}
+
+% --- Stress Test 2: GPC ---
+\begin{frame}{Stress Test 2: GP Classification (150-D)}
+  \small
+  \vspace*{-0.25cm}
+  \textbf{Setup:} RBF kernel ($\ell=1$, $\sigma_f^2=1$), 150 California Housing points, fully dense $K$. The gradient $\nabla\log p(f)\!=\!-K^{-1}f + y\odot\sigma(-y\odot f)$ requires a dense solve at every leapfrog step.
+
+  \centering
+  \includegraphics[width=0.65\textwidth]{GPC/kernel_matrix.png}
+  \vspace*{-0.1cm}
+  \captionof{figure}{RBF kernel matrix $K$: dense correlation structure.}
+  \vspace*{-0.25cm}
+  \begin{tcolorbox}[warnbox, title=Nuanced result]
+    \small
+    NUTS: $2.14\!\times\!10^{-3}$ ESS/grad \quad HMC: $1.52\!\times\!10^{-3}$ ESS/grad\\[3pt]
+    \textbf{Modest 40\% gain}, but NUTS uses $4\times$ more gradient evaluations. The dense covariance induces long trajectories before a U-turn is detected. The advantage over well-tuned HMC is narrow here.
+  \end{tcolorbox}
+\end{frame}
+
+% --- Stress Test 3: Neal's Funnel ---
+\begin{frame}{Stress Test 3: Neal's Funnel (10-D)}
+  \textbf{Setup:} A pathological geometry with a narrow neck and wide top:
+  $$v \sim \mathcal{N}(0,9), \qquad x_i\mid v\sim\mathcal{N}(0,e^v),\quad i=1,\dots,9$$
+
+  \noindent
+  \begin{minipage}[t]{0.475\textwidth}
+    \begin{tcolorbox}[warnbox, title=The challenge]
+      \small $v\!\to\!-\infty$: $e^v\!\to\!0$, needs tiny $\varepsilon$\\
+      $v\!>\!0$: wide top, needs large $\varepsilon$\\[4pt]
+      HMC's \textbf{fixed step size} cannot handle both.
+    \end{tcolorbox}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.475\textwidth}
+    \begin{tcolorbox}[keybox, title=Result]
+      \small NUTS recovers $\mathrm{Var}(v)\approx 9$ (truth).\\[4pt]
+      HMC is confined and severely underestimates $\mathrm{Var}(v)$.
+    \end{tcolorbox}
+  \end{minipage}
+
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.7\textwidth]{Funnel/funnel_scatter.png}
+    \caption{\textbf{Left:} ground truth. \textbf{Centre:} NUTS covers the full funnel. \textbf{Right:} HMC fails to fully explore the funnel.}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{Funnel: Trace Plots \& Marginal}
+  \noindent
+  \begin{minipage}[t]{0.475\textwidth}
+    \begin{figure}
+      \centering
+      \includegraphics[width=\textwidth]{Funnel/trace_plots.png}
+      \caption{NUTS mixes freely; HMC shows flat segments (rejected proposals).}
+    \end{figure}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.475\textwidth}
+    \begin{figure}
+      \centering
+      \includegraphics[width=\textwidth]{Funnel/v_marginal.png}
+      \caption{Marginal of $v$: NUTS recovers the truth; HMC misses $v<0$ entirely.}
+    \end{figure}
+  \end{minipage}
 \end{frame}
 
 \begin{frame}{Appendix: BNN Trace Plots}
